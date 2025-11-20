@@ -18,7 +18,7 @@ This deployment uses a **monolithic architecture**, meaning all components (Web 
 | Web Stack | LEMP (NGINX, PHP 8.1-FPM) | Serves the GLPI application |
 | Database  | MySQL Server 8 | Installed and running on ```localhost``` (same VM) |
 ### B. Critical Trade-Offs
-text here
+Running GLPI on a single free-tier VM keeps everything free, but it comes with real limitations. It’s perfectly fine for testing, learning, or small internal use but it sacrifices speed, encryption, and uptime guarantees.
 
 | Requirement | Status | Reason |
 |----------:|:----------:|:-----|
