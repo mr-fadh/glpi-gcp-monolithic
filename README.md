@@ -4,11 +4,29 @@ This guide documents the complete setup of the GLPI IT Service Management (ITSM)
 
 This configuration is optimized for the GCP Always Free Tier (```e2-micro``` VM) to achieve zero recurring cost.
 
+## Table of Contents 📝
+1. [Architecture Overview](#architecture-overview)
+    - [Monolithic Architecture](#1-monolithic-architecture)
+    - [Critical Trade-Offs](#2-critical-trade-offs)
+2. [GCP Provisioning](#gcp-provisioning)
+    - [Initial Setup & Firewall](#1-initial-setup--firewall)
+    - [Create the Free-Tier VM](#2-create-the-free-tier-vm)
+3. [Server Setup](#server-setup)
+    - [Hardening & Swap File](#1-hardening--swap-file-performance-fix)
+    - [Install Dependencies](#2-install-dependencies)
+    - [Configure Local MySQL](#3-configure-local-mysql)
+4. [GLPI Application Setup](#glpi-application-setup)
+    - [Download and Permissions](#1-download-and-permissions)
+    - [Configure NGINX](#2-configure-nginx)
+    - [Set Permissions and Cron](#3-set-permissions-and-cron)
+6. [Final Web Installation and Security](#final-web-installation-and-security)
+
 ---
 
-## 1. Architecture Overview (The "Before" State)
+# Architecture Overview
 
-### A. Monolithic Architecture
+### 1. Monolithic Architecture
+
 This deployment uses a **monolithic architecture**, meaning all components (Web Server, Application, and Database) are installed on one Virtual Machine (VM). This architecture places all components on a single VM. This is the cheapest method but the least performant.
 
 | Component | Technology | Status |
@@ -17,7 +35,7 @@ This deployment uses a **monolithic architecture**, meaning all components (Web 
 | OS        | Ubuntu 22.04 LTS | Standard, Stable Linux OS. |
 | Web Stack | LEMP (NGINX, PHP 8.1-FPM) | Serves the GLPI application |
 | Database  | MySQL Server 8 | Installed and running on ```localhost``` (same VM) |
-### B. Critical Trade-Offs
+### 2. Critical Trade-Offs
 Running GLPI on a single free-tier VM keeps everything free, but it comes with real limitations. It’s perfectly fine for testing, learning, or small internal use but it sacrifices speed, encryption, and uptime guarantees.
 
 | Requirement | Status | Reason |
@@ -28,11 +46,11 @@ Running GLPI on a single free-tier VM keeps everything free, but it comes with r
 
 ---
 
-# 2. GCP Provisioning (GCP Cloud Shell Recommended)
+# GCP Provisioning
 
 Run all ```gcloud``` commands from the **GCP Cloud Shell terminal**.
 
-### A. Initial Setup & Firewall
+### 1. Initial Setup & Firewall
 - **Set Project and Enable API:** Replace ```[YOUR_PROJECT_ID]``` with your project ID.
   ```bash
   gcloud config set project [YOUR_PROJECT_ID]
@@ -52,7 +70,7 @@ Run all ```gcloud``` commands from the **GCP Cloud Shell terminal**.
   gcloud compute firewall-rules create allow-ssh --allow=tcp:22 --source-ranges=$(curl -s ifconfig.me)/32 --target-tags=allow-ssh
   ```
 
-### B. Create the Free-Tier VM
+### 2. Create the Free-Tier VM
 This command creates the VM with the necessary tags and configuration.
 ```bash
 # Set a free tier zone (choose one: us-west1-a, us-central1-a, us-east1-a)
@@ -71,7 +89,7 @@ gcloud compute instances create glpi-server \
 
 ---
 
-# 3. Server Setup (LEMP Stack Installation)
+# Server Setup
 
 After the VM is created, connect using the external IP address.
 ```bash
@@ -82,7 +100,7 @@ export VM_IP=$(gcloud compute instances describe glpi-server --zone=$GCP_ZONE --
 ssh -i ~/.ssh/gcp_rsa [YOUR_USERNAME]@$VM_I
 ```
 
-### A. Hardening & Swap File (Performance Fix)
+### 1. Hardening & Swap File (Performance Fix)
 This is the key step to avoid OOM errors on the 1GB VM.
 ```bash
 sudo apt update && sudo apt upgrade -y
@@ -97,7 +115,7 @@ sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```
 
-### B. Install Dependencies
+### 2. Install Dependencies
 ```bash
 # Install NGINX, MySQL, PHP-FPM, and all required GLPI extensions
 sudo apt install -y nginx mysql-server php8.1-fpm \
@@ -107,7 +125,7 @@ sudo apt install -y nginx mysql-server php8.1-fpm \
                    php8.1-apcu php8.1-xmlrpc
 ```
 
-### C. Configure Local MySQL
+### 3. Configure Local MySQL
 We set up the database and the required ```glpi_user``` for the application.
 - Secure MySQL: Set the root password (needed for future maintenance).
   ```bash
@@ -130,9 +148,9 @@ We set up the database and the required ```glpi_user``` for the application.
 
 ---
 
-# 4. GLPI Application Setup
+# GLPI Application Setup
 
-### A. Download and Permissions
+### 1. Download and Permissions
 ```bash
 cd /tmp
 # Download the latest stable version (using 10.0.18 for this guide)
@@ -146,7 +164,7 @@ sudo chown -R www-data:www-data /var/www/glpi
 sudo chmod -R 755 /var/www/glpi
 ```
 
-### B. Configure NGINX (Routing Fix)
+### 2. Configure NGINX
 This configuration block is essential and corrects the routing errors (404 Not Found after login) faced in earlier attempts.
 - Optimize PHP-FPM: Adjust for low RAM.
   ```bash
@@ -211,7 +229,7 @@ This configuration block is essential and corrects the routing errors (404 Not F
   sudo systemctl restart php8.1-fpm
   ```
 
-### C. Set Permissions and Cron
+### 3. Set Permissions and Cron
 ```bash
 # Set ownership to the web server user
 sudo chown -R www-data:www-data /var/www/glpi
@@ -224,7 +242,7 @@ sudo nano /etc/cron.d/glpi
 
 ---
 
-# 5.  Final Web Installation and Security
+# Final Web Installation and Security
 - **Access the Installer:** Open your web browser and navigate to http://[YOUR_VM_IP_ADDRESS].
 - Follow the steps until you reach the **Database Connection** page.
 - **Enter Credentials:**
