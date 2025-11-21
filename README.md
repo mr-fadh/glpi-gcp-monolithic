@@ -3,11 +3,11 @@ This documentation explains how to deploy GLPI as an IT Asset Management (ITAM) 
 Suitable for student projects, learning environments, or light internal usage with zero operational cost.
 
 ## Table of Contents 📝
-1. [Architecture Overview](#architecture-overview)
-2. [GCP Provisioning](#gcp-provisioning)
-3. [Server Setup](#server-setup)
-4. [GLPI Application Setup](#glpi-application-setup)
-5. [Final Web Installation and Security](#final-web-installation-and-security)
+1. [Architecture Overview]([#1-architecture-overview))
+2. [GCP Provisioning]([#2-gcp-provisioning-%EF%B8%8F))
+3. [Server Setup](#3-server-setup-)
+4. [GLPI Application Setup](#4-glpi-application-setup-))
+5. [Final Web Installation and Security](#5-final-web-installation-and-security)
 
 ---
 
@@ -74,7 +74,7 @@ gcloud compute instances create glpi-server \
 
 ---
 
-# 3. Server Setup
+# 3. Server Setup 🔧
 
 ### 3.1. Connect to VM
 After the VM is created, connect using the external IP address.
