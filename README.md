@@ -1,56 +1,41 @@
 # GLPI IT Asset Management (ITAM) – Monolithic Deployment on GCP Free Tier
-
-This guide documents the complete setup of the GLPI IT Service Management (ITSM) platform, running its application and database on a single Google Compute Engine (GCE) VM.
-
-This configuration is optimized for the GCP Always Free Tier (```e2-micro``` VM) to achieve zero recurring cost.
+This documentation explains how to deploy GLPI as an IT Asset Management (ITAM) & ITSM solution on a single VM using GCP Always Free Tier (e2-micro).
+Suitable for student projects, learning environments, or light internal usage with zero operational cost.
 
 ## Table of Contents 📝
 1. [Architecture Overview](#architecture-overview)
-    - [Monolithic Architecture](#1-monolithic-architecture)
-    - [Critical Trade-Offs](#2-critical-trade-offs)
 2. [GCP Provisioning](#gcp-provisioning)
-    - [Initial Setup & Firewall](#1-initial-setup--firewall)
-    - [Create the Free-Tier VM](#2-create-the-free-tier-vm)
 3. [Server Setup](#server-setup)
-    - [Hardening & Swap File](#1-hardening--swap-file-performance-fix)
-    - [Install Dependencies](#2-install-dependencies)
-    - [Configure Local MySQL](#3-configure-local-mysql)
 4. [GLPI Application Setup](#glpi-application-setup)
-    - [Download and Permissions](#1-download-and-permissions)
-    - [Configure NGINX](#2-configure-nginx)
-    - [Set Permissions and Cron](#3-set-permissions-and-cron)
-6. [Final Web Installation and Security](#final-web-installation-and-security)
+5. [Final Web Installation and Security](#final-web-installation-and-security)
 
 ---
 
-# Architecture Overview
-
-### 1. Monolithic Architecture
-
+# 1. Architecture Overview
 This deployment uses a **monolithic architecture**, meaning all components (Web Server, Application, and Database) are installed on one Virtual Machine (VM). This architecture places all components on a single VM. This is the cheapest method but the least performant.
 
-| Component | Technology | Status |
-|----------:|:----------:|:-----|
-| Compute   | GCP e2-micro VM | 1 vCPU, 1GB RAM (FREE TIER) |
-| OS        | Ubuntu 22.04 LTS | Standard, Stable Linux OS. |
-| Web Stack | LEMP (NGINX, PHP 8.1-FPM) | Serves the GLPI application |
-| Database  | MySQL Server 8 | Installed and running on ```localhost``` (same VM) |
-### 2. Critical Trade-Offs
+| Component |         Technology         |                       Status                       |
+|-----------|----------------------------|----------------------------------------------------|
+| Compute   | GCP e2-micro VM            | 1 vCPU, 1GB RAM (FREE TIER)                        |
+| OS        | Ubuntu 22.04 LTS           | Standard, Stable Linux OS.                         |
+| Web Stack | LEMP (NGINX, PHP 8.1-FPM)  | Serves the GLPI application                        |
+| Database  | MySQL Server 8             | Installed and running on ```localhost``` (same VM) |
+### Critical Trade-Offs
 Running GLPI on a single free-tier VM keeps everything free, but it comes with real limitations. It’s perfectly fine for testing, learning, or small internal use but it sacrifices speed, encryption, and uptime guarantees.
 
-| Requirement | Status | Reason |
-|----------:|:----------:|:-----|
-| Performance | POOR | The application and database fight for the limited 1GB RAM. The site will be functional but slow. |
-| Security(HTTPS) | NONE | Using HTTP only. HTTPS is impossible without a paid domain name. |
-| Reliability | LOW | Single Point of Failure (SPOF). If the VM fails, the database is unavailable. |
+|   Requirement   |             Status             |                 Reason                 |
+|-----------------|--------------------------------|----------------------------------------|
+| Performance     | Limited                        | 1GB RAM shared between app & DB        |
+| Security(HTTPS) | No HTTPS                       | Domain + SSL needed for encryption     |
+| Reliability     | Single Point of Failure (SPOF) | If the VM fails, the application & database is down. |
 
 ---
 
-# GCP Provisioning
+# 2. GCP Provisioning ☁️
 
-Run all ```gcloud``` commands from the **GCP Cloud Shell terminal**.
+All commands below are executed in **GCP Cloud Shell**.
 
-### 1. Initial Setup & Firewall
+### 2.1. Initial Setup & Firewall
 - **Set Project and Enable API:** Replace ```[YOUR_PROJECT_ID]``` with your project ID.
   ```bash
   gcloud config set project [YOUR_PROJECT_ID]
@@ -70,7 +55,7 @@ Run all ```gcloud``` commands from the **GCP Cloud Shell terminal**.
   gcloud compute firewall-rules create allow-ssh --allow=tcp:22 --source-ranges=$(curl -s ifconfig.me)/32 --target-tags=allow-ssh
   ```
 
-### 2. Create the Free-Tier VM
+### 2.2. Create the Free-Tier VM
 This command creates the VM with the necessary tags and configuration.
 ```bash
 # Set a free tier zone (choose one: us-west1-a, us-central1-a, us-east1-a)
@@ -89,8 +74,9 @@ gcloud compute instances create glpi-server \
 
 ---
 
-# Server Setup
+# 3. Server Setup
 
+### 3.1. Connect to VM
 After the VM is created, connect using the external IP address.
 ```bash
 # Get the ephemeral IP address
@@ -100,7 +86,7 @@ export VM_IP=$(gcloud compute instances describe glpi-server --zone=$GCP_ZONE --
 ssh -i ~/.ssh/gcp_rsa [YOUR_USERNAME]@$VM_I
 ```
 
-### 1. Hardening & Swap File (Performance Fix)
+### 3.2. System Update & Swap File (Performance Fix)
 This is the key step to avoid OOM errors on the 1GB VM.
 ```bash
 sudo apt update && sudo apt upgrade -y
@@ -115,7 +101,7 @@ sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```
 
-### 2. Install Dependencies
+### 3.3. Install Dependencies
 ```bash
 # Install NGINX, MySQL, PHP-FPM, and all required GLPI extensions
 sudo apt install -y nginx mysql-server php8.1-fpm \
@@ -125,7 +111,7 @@ sudo apt install -y nginx mysql-server php8.1-fpm \
                    php8.1-apcu php8.1-xmlrpc
 ```
 
-### 3. Configure Local MySQL
+### 3.4. Configure Local MySQL
 We set up the database and the required ```glpi_user``` for the application.
 - Secure MySQL: Set the root password (needed for future maintenance).
   ```bash
@@ -148,9 +134,9 @@ We set up the database and the required ```glpi_user``` for the application.
 
 ---
 
-# GLPI Application Setup
+# 4. GLPI Application Setup 📦
 
-### 1. Download and Permissions
+### 4.1. Download and Permissions
 ```bash
 cd /tmp
 # Download the latest stable version (using 10.0.18 for this guide)
@@ -164,7 +150,7 @@ sudo chown -R www-data:www-data /var/www/glpi
 sudo chmod -R 755 /var/www/glpi
 ```
 
-### 2. Configure NGINX
+### 4.2. Configure NGINX
 This configuration block is essential and corrects the routing errors (404 Not Found after login) faced in earlier attempts.
 - Optimize PHP-FPM: Adjust for low RAM.
   ```bash
@@ -229,7 +215,7 @@ This configuration block is essential and corrects the routing errors (404 Not F
   sudo systemctl restart php8.1-fpm
   ```
 
-### 3. Set Permissions and Cron
+### 4.3. Set Permissions and Cron
 ```bash
 # Set ownership to the web server user
 sudo chown -R www-data:www-data /var/www/glpi
@@ -242,13 +228,13 @@ sudo nano /etc/cron.d/glpi
 
 ---
 
-# Final Web Installation and Security
+# 5. Final Web Installation and Security
 - **Access the Installer:** Open your web browser and navigate to http://[YOUR_VM_IP_ADDRESS].
 - Follow the steps until you reach the **Database Connection** page.
 - **Enter Credentials:**
   - SQL server: localhost
   - SQL user: glpi_user
-  - SQL password: YOUR_GLPI_DB_PASSWORD (from Section 3.C.)
+  - SQL password: YOUR_GLPI_DB_PASSWORD
 - Finish the installation and immediately change the default passwords (glpi/glpi, tech/tech, etc.).
 
 ### Final Security and Documentation Step
@@ -258,3 +244,10 @@ sudo nano /etc/cron.d/glpi
   ```
 - Record Final IP: Note the external IP address of your VM for future access.
 
+# Summary 📌
+| Category                  | Status                                           |
+|---------------------------|--------------------------------------------------|
+| Cost                      | Free Tier eligible                               |
+| Performance               | Limited by shared resources                      |
+| Security                  | No HTTPS (optional improvement available)        |
+| Use Case                  | Student projects / learning environments         |
