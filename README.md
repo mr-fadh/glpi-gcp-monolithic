@@ -223,6 +223,21 @@ sudo nano /etc/cron.d/glpi
   - SQL user: glpi_user
   - SQL password: YOUR_GLPI_DB_PASSWORD
 - Finish the installation and immediately change the default passwords (glpi/glpi, tech/tech, etc.).
+- After installation you should see:
+  <table>
+    <tr>
+      <td align="center"><b>GLPI Login Page</b></td>
+      <td align="center"><b>GLPI Dashboard</b></td>
+    </tr>
+    <tr>
+      <td align="center">
+        <img src="docs/login_page.png" width="500" align="center">
+      </td>
+      <td align="center">
+        <img src="docs/dashboard_page.png" width="500" align="center">
+      </td>
+    </tr>
+  </table>
 
 ### Final Security and Documentation Step
 - Remove Installer File: (Prevents security vulnerability)
