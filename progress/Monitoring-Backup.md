@@ -130,7 +130,7 @@ Add this at the bottom:
 # 5. Summary 📌
 | Feature | Implementation | Result |
 |----|----|----|
-| Visibility | Ops Agent	100% visibility into RAM & Disk usage. |
-| Reliability |	Uptime Check	< 1 min detection time for downtime. |
-| Recovery |	Auto-Backups	24-Hour Recovery Point Objective (RPO). |
-| Cost |	Optimization	$0.00 additional cost (Free tier & minimal storage). |
+| Visibility | Ops Agent |	**100%** visibility into RAM & Disk usage. |
+| Reliability |	Uptime Check |	**< 1 min** detection time for downtime. |
+| Recovery |	Auto-Backups |	**24-Hour** Recovery Point Objective (RPO). |
+| Cost |	Optimization |	**$0.00** additional cost (Free tier & minimal storage). |
