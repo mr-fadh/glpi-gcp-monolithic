@@ -9,15 +9,13 @@ This phase focuses on ensuring the system is observable, alerting administrators
 5. [Summary](#5-summary-)
 
 # 1. Architecture Overview
-**Before:** "Flying Blind"
-- Visibility: Google Cloud Console only showed CPU usage. RAM usage (critical for the 1GB ```e2-micro```) was invisible.
-- Availability: If the website crashed (NGINX failure), the VM would look "healthy," but users would face downtime.
-- Data Safety: Backups were manual ```mysqldump``` commands run by hand.
-
-**After:** "Full Observability"
-- Ops Agent: Installed inside the VM to report Memory & Disk metrics.
-- Uptime Checks: Global probes ping ```mr-fadh.me``` every 60 seconds.
-- Automation: Database and VM disks are backed up nightly without human intervention.
+This phase moves the project from a "Passive" state (it works until it breaks) to an "Active" state (it tells us when it's breaking).
+| Compnonent | Technology | Status |
+|----|----|----|
+| Agent |	Google Cloud Ops Agent |	Installed on VM to track RAM/Disk metrics. |
+| Monitoring |	Uptime Checks |	Global probes pinging mr-fadh.me every 60s. |
+| Alerting |	Email Notifications |	Triggers on High Memory (>90%) or Downtime. |
+| Backup |	Snapshot + Script |	Automated nightly backup for both VM config and SQL data. |
 
 # 2. Observability (Ops Agent) 🕵️‍♂️
 Standard GCP metrics cannot see inside the Operating System. We installed the **Google Cloud Ops** Agent to expose RAM utilization.
@@ -36,45 +34,80 @@ sudo systemctl status google-cloud-ops-agent
 ```
 - Outcome: The "Memory Utilization" chart in the Monitoring Dashboard is now active.
 
+### 2.2. Verify Installation
+Ensure the service is active and running.
+```bash
+sudo systemctl status google-cloud-ops-agent
+```
+
+
 # 3. Uptime & Alerting 🚨
 We configured Google Cloud Monitoring to act as a 24/7 watchman.
 
 ### 3.1. Uptime Check
-Target: ```https://mr-fadh.me```
-Frequency: 1 minute
-Timeout: 10 seconds
-Content Matching: Looks for the string ```"GCP x GLPI Project"``` to ensure the correct landing page is loaded.
-3.2. Alert Policies
-Notification Channels were configured to send emails to the Admin.
+First to create uptime check via **Google Cloud Console** go to Monitoring > Uptime checks > Create Uptime Check.
+- Settings:
+  - Protocol: HTTPS
+  - Target: ```mr-fadh.me```
+  - Frequency: ```1 minute```
+  - Response Validation: Content matching enabled.
+  - Content to match: ```"GCP x GLPI Project"``` (Ensures the landing page loads).
 
-| Policy Name | Trigger Condition | Rationale |
-|----|----|----|
-| [URGENT] GLPI VM Memory > 90%	| RAM usage exceeds 90% for 5 mins | Prevents OOM (Out of Memory) crashes on the 1GB VM. |
-| [CRITICAL] GLPI Site Down | Uptime Check fails (< 90% success) | Immediate notification if the NGINX server or Domain fails. |
+### 3.2. Notification Channel
+Then, we need to set alert by go to Monitoring > Uptime checks > Create Uptime Check.
+- Add email channel with ```[Your email address]```.
+- Then, set the display name as ```Admin Alert Email```
+
+### 3.3. Alert Policies
+We created two specific policies to cover performance and availability.
+
+**Policy A: High Memory Usage (OOM Prevention)**
+- Metric: VM Instance > Memory > Memory Utilization.
+- Condition: Threshold is **Above** ```90%```.
+- Duration: 5 minutes.
+- Significance: Prevents the server from freezing due to the 1GB RAM limit.
+
+**Policy B: Website Down (Critical)**
+- Metric: Uptime Check URL > Check passed.
+- Condition: Threshold is **Below** ```90%``` (0.9).
+- Significance: Triggers immediately if the NGINX server stops or the domain fails.
+
 
 # 4. Automated Backup Strategy 💾
-We replaced manual backups with a "Set and Forget" automated schedule.
+We replaced manual ```mysqldump``` operations with a fully automated "Set and Forget" strategy.
 
 ### 4.1. VM Configuration (Snapshot Schedule)
 Since the VM holds the NGINX configuration and GLPI logic (but not the data), a daily snapshot is sufficient.
+
+- Console Path: Compute Engine > Storage > Snapshots > Scheduled Snapshots.
 - Schedule Name: ```daily-web-config```
+- Region: ```us-west1``` (Matching VM Location)
 - Target: ```glpi-server``` boot disk
 - Frequency: Daily at 03:00 - 04:00 (Low traffic window).
 - Retention: 7 Days (Auto-delete older snapshots).
-Deletion Rule: "Delete snapshots older than 7 days" (Prevents ghost billing if the VM is deleted).
-### 4.2. Database Backup (Script + Cron)
-Challenge: The Cloud SQL "Free Trial" instance type blocks API-based automated backups (HTTP Error 400). Solution: Implemented a script-based automation using ```mysqldump``` and ```crontab```.
+- Deletion Rule: "Delete snapshots older than 7 days" (Prevents ghost billing if the VM is deleted).
+  - _**Note:**_ This rule is critical for FinOps. It ensures that if the project is deleted, the backups are also deleted to stop billing.
 
-The Backup Script (```~/backup_db.sh```):
+### 4.2. Database Backup (Script + Cron)
+Challenge: The Cloud SQL "Free Trial" instance type blocks API-based automated backups (```HTTP Error 400```). 
+
+Solution: We implemented a local script on the VM to dump the data and manage retention.
+
+**Step 1: Create Backup Directory**
+```bash
+mkdir -p ~/glpi-backups
+```
+
+**Step 2: Create the Backup Script File** (```~/backup_db.sh```):
 ```bash
 #!/bin/bash
 
 BACKUP_DIR="/home/[USER]/glpi-backups"
 DATE=$(date +"%Y-%m-%d_%H-%M")
-DB_HOST="[CLOUD_SQL_IP]"
-DB_USER="glpi_user"
-DB_PASS="[DB_PASSWORD]"
-DB_NAME="glpidb"
+DB_HOST="[YOUR_CLOUD_SQL_IP]"
+DB_USER="[YOUR_DB_USER_USERNAME]"
+DB_PASS="[YOUR_DB_PASSWORD]"
+DB_NAME="[YOUR_DB_NAME]"
 
 # Dump the database
 mysqldump -h $DB_HOST -u $DB_USER -p"$DB_PASS" $DB_NAME > $BACKUP_DIR/glpi_backup_$DATE.sql
@@ -83,16 +116,21 @@ mysqldump -h $DB_HOST -u $DB_USER -p"$DB_PASS" $DB_NAME > $BACKUP_DIR/glpi_backu
 find $BACKUP_DIR -type f -name "*.sql" -mtime +7 -delete
 ```
 
-The Scheduler (Crontab):
+**Step 3: Enable Automation (Cron)** 
+We added the script to the system scheduler
+```bash
+crontab -e
+```
+Add this at the bottom:
 ```bash
 0 3 * * * /bin/bash /home/[USER]/backup_db.sh
 ```
 - **Result**: A fresh SQL dump is saved locally every night at 3:00 AM.
 
 # 5. Summary 📌
-| Category | Status | Improvement |
+| Feature | Implementation | Result |
 |----|----|----|
-| Visibility |	✅ Full |	RAM usage is now visible; blind spots removed. |
-| Response |	✅ < 5 mins |	Alerts trigger immediately on downtime. |
-| Recovery |	✅ 24 Hours |	RPO (Recovery Point Objective) reduced from "Never" to "24 Hours". |
-| Cost |	✅ $0.00 |	Uses free Ops Agent and minimal snapshot storage. |
+| Visibility | Ops Agent	100% visibility into RAM & Disk usage. |
+| Reliability |	Uptime Check	< 1 min detection time for downtime. |
+| Recovery |	Auto-Backups	24-Hour Recovery Point Objective (RPO). |
+| Cost |	Optimization	$0.00 additional cost (Free tier & minimal storage). |
